@@ -44,48 +44,43 @@ class HorseData_scraping():
         return horse_name
 
     def get_HorseProfile(self, soup):
-        # プロフィールテーブルを取得
-        horse_profile =soup.find("table",class_="db_prof_table no_OwnerUnit").get_text()
-        horse_profile = horse_profile.split()
-
-        return horse_profile
-
-    def get_HorseBirthday(self, horse_profile):
         horse_birthday = None
-
-        profile_iter = iter(horse_profile)
-
-        while(True):
-            try:
-                ans = next(profile_iter)
-                if ans == '生年月日':
-                    horse_birthday =next(profile_iter)
-                    break
-            except StopIteration:
+        # プロフィールテーブルを取得
+        profile_table = soup.find("table",class_="db_prof_table no_OwnerUnit")
+        trs = profile_table.find_all('tr')
+        for tr in trs:
+            th = tr.find('th')
+            title = th.get_text()
+            if title == '生年月日':
+                td = tr.find('td')
+                horse_birthday = td.get_text()
                 break
 
         return horse_birthday
 
     def get_HorseBoold(self, soup):
+        link_dict = dict()
+        horse_blood = list()
 
-        horse_blood =soup.find("table",class_="blood_table").get_text()
-        horse_blood = horse_blood.split('\n')
-        horse_blood = [h for h in horse_blood if len(h)>0]
+        blood_table = soup.find("table",class_="blood_table")
+        links = blood_table.find_all('a')
+        for i, link in enumerate(links):
+            horse_name = None
+            url = link.attrs['href']
+            if url.strip('/horse/ped//') != '':
+                horse_name = link.get_text()
+                horse_blood.append(horse_name)
+
+                url = link.attrs['href']
+                url = "https://db.netkeiba.com" + url
+                url = self.get_NextHorseInfo(horse_name,url)
+                link_dict.setdefault(horse_name,url)
+            else:
+                horse_blood.append(None)
 
         f_horse,ff_horse,fm_horse,m_horse,mf_horse,mm_horse = horse_blood
 
-        return horse_blood
-
-    def get_NextHorseLink(self, soup, horse_blood):
-        link_dict = dict()
-        for horse_name in horse_blood:
-            link =soup.find("a",text=horse_name)
-            url = link.attrs['href']
-            url = "https://db.netkeiba.com" + url
-            url = self.get_NextHorseInfo(horse_name,url)
-            link_dict.setdefault(horse_name,url)
-
-        return link_dict
+        return horse_blood, link_dict
 
     def get_NextHorseInfo(self,horse_name,url):
         soup = self.get_response(url)
@@ -102,10 +97,8 @@ class HorseData_scraping():
 
         print('access:%-16s:%s' % (horse_name,url))
         horse_name = horse_name.replace(' ','_')
-        horse_profile = self.get_HorseProfile(soup)
-        horse_birthday = self.get_HorseBirthday(horse_profile)
-        horse_blood = self.get_HorseBoold(soup)
-        horse_blood_link_dict = self.get_NextHorseLink(soup,horse_blood)
+        horse_birthday = self.get_HorseProfile(soup)
+        horse_blood, horse_blood_link_dict = self.get_HorseBoold(soup)
 
         self.DB.connect_DB()
 
@@ -156,7 +149,7 @@ class HorseData_scraping():
         link_dict = self.DB.get_request_Tbl()
 
         def get_next(link_dict):
-            next_horse = None
+            next_horse = url = pkey = None
             ans = list(link_dict.keys())
             if ans:
                 next_horse = ans[0]
@@ -179,8 +172,7 @@ class HorseData_scraping():
         while(True):
             #time.sleep(self.interval_time)
             link_dict = self.get_HorseInfo(url,horse_pkey,link_dict)
-            if len(link_dict) == 0:
-                break
+
             while(True):
                 next_horse, url, horse_pkey = get_next(link_dict)
                 if not self.DB.get_HorseURL_Tbl(url):
@@ -188,6 +180,8 @@ class HorseData_scraping():
                 print(next_horse,'既に登録されているため、スキップします。')
 
             print(len(link_dict))
+            if len(link_dict) == 0:
+                break
 
             if next_horse in horse_name:
                 horse_name[next_horse] = horse_name[next_horse] +1
@@ -205,6 +199,8 @@ class HorseData_scraping():
 
 if __name__ == '__main__':
     start_url = "https://db.netkeiba.com/horse/2002100816/"
+    #start_url = "https://db.netkeiba.com/horse/000a015efd/"
+    #start_url = "https://db.netkeiba.com/horse/000a00111d/"
     hScr = HorseData_scraping(limit_time=3000)
     hScr.run(start_url)
 

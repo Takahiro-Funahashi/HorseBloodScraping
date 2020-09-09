@@ -157,9 +157,12 @@ class class_SQLite():
             set_param = ''
 
             for horse_name in horse_blood:
-                horse_name = horse_name.replace(' ','_')
-                URL, hPkey = link_dict[horse_name]
-                set_param += f'{hPkey},'
+                if horse_name is not None:
+                    horse_name = horse_name.replace(' ','_')
+                    URL, hPkey = link_dict[horse_name]
+                    set_param += f'{hPkey},'
+                else:
+                    set_param += f'{null},'
             else:
                 set_param = set_param.rstrip(',')
 
