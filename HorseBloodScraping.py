@@ -69,12 +69,16 @@ class HorseData_scraping():
             url = link.attrs['href']
             if url.strip('/horse/ped//') != '':
                 horse_name = link.get_text()
-                horse_blood.append(horse_name)
+                if horse_name: #ページの誤植？で簡易血統表から馬名が消えているものがある。
+                    url = link.attrs['href']
+                    url = "https://db.netkeiba.com" + url
 
-                url = link.attrs['href']
-                url = "https://db.netkeiba.com" + url
-                url = self.get_NextHorseInfo(horse_name,url)
-                link_dict.setdefault(horse_name,url)
+                    url, horse_name = self.get_NextHorseInfo(horse_name,url)
+
+                    horse_blood.append(horse_name)
+                    link_dict.setdefault(horse_name,url)
+                else:
+                    horse_blood.append(None)
             else:
                 horse_blood.append(None)
 
@@ -85,11 +89,21 @@ class HorseData_scraping():
     def get_NextHorseInfo(self,horse_name,url):
         soup = self.get_response(url)
         print('access:%-16s:%s' % (horse_name,url))
-        horse_menu =soup.find("a",title=f'{horse_name}のプロフィールTOP')
-        url = horse_menu.attrs['href']
-        url = "https://db.netkeiba.com" + url
 
-        return url
+        # 簡易血統表では馬名が省略されることがあり、プロフィールの馬名と異なる。
+        detail_menu = soup.find('ul',class_='db_detail_menu')
+        a_tble = detail_menu.find_all('a')
+        for a in a_tble:
+            title = a.attrs['title']
+            if 'のプロフィールTOP' in title:
+                get_horse_name = title.rstrip('のプロフィールTOP')
+                if horse_name != get_horse_name:
+                    horse_name = get_horse_name
+                url = a.attrs['href']
+                url = "https://db.netkeiba.com" + url
+                break
+
+        return url, horse_name
 
     def get_HorseInfo(self,url,horse_pkey,u_link_dict):
         soup = self.get_response(url)
@@ -114,11 +128,12 @@ class HorseData_scraping():
 
         u_link_dict.update(link_dict)
 
+        self.DB.horse_pedigree(horse_pkey)
+
         self.DB.replace_request_Tbl(u_link_dict)
 
         self.DB.commit_DB()
         self.DB.disconnect_DB()
-
 
         f_horse,ff_horse,fm_horse,m_horse,mf_horse,mm_horse = horse_blood
 
