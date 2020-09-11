@@ -47,14 +47,15 @@ class HorseData_scraping():
         horse_birthday = None
         # プロフィールテーブルを取得
         profile_table = soup.find("table",class_="db_prof_table no_OwnerUnit")
-        trs = profile_table.find_all('tr')
-        for tr in trs:
-            th = tr.find('th')
-            title = th.get_text()
-            if title == '生年月日':
-                td = tr.find('td')
-                horse_birthday = td.get_text()
-                break
+        if profile_table:
+            trs = profile_table.find_all('tr')
+            for tr in trs:
+                th = tr.find('th')
+                title = th.get_text()
+                if title == '生年月日':
+                    td = tr.find('td')
+                    horse_birthday = td.get_text()
+                    break
 
         return horse_birthday
 
@@ -97,10 +98,14 @@ class HorseData_scraping():
             title = a.attrs['title']
             if 'のプロフィールTOP' in title:
                 get_horse_name = title.rstrip('のプロフィールTOP')
-                if horse_name != get_horse_name:
-                    horse_name = get_horse_name
-                url = a.attrs['href']
-                url = "https://db.netkeiba.com" + url
+                if get_horse_name:
+                    if horse_name != get_horse_name:
+                        horse_name = get_horse_name
+                    url = a.attrs['href']
+                    url = "https://db.netkeiba.com" + url
+                else:
+                    #ページエラー　Sister 2 to Blast' 'https://db.netkeiba.com/horse/ped/000a016742/'
+                    return None,horse_name
                 break
 
         return url, horse_name
@@ -190,9 +195,12 @@ class HorseData_scraping():
 
             while(True):
                 next_horse, url, horse_pkey = get_next(link_dict)
-                if not self.DB.get_HorseURL_Tbl(url):
+                if not self.DB.get_HorseURL_Tbl(url) and url and url != 'None':
                     break
-                print(next_horse,'既に登録されているため、スキップします。')
+                if not url or url == 'None':
+                    print(next_horse,'URLがないか異常のため、スキップします。')
+                else:
+                    print(next_horse,'既に登録されているため、スキップします。')
 
             print(len(link_dict))
             if len(link_dict) == 0:
@@ -216,6 +224,8 @@ if __name__ == '__main__':
     start_url = "https://db.netkeiba.com/horse/2002100816/"
     #start_url = "https://db.netkeiba.com/horse/000a015efd/"
     #start_url = "https://db.netkeiba.com/horse/000a00111d/"
+    start_url = "https://db.netkeiba.com/horse/000a015b48/"
+
     hScr = HorseData_scraping(limit_time=3000)
     hScr.run(start_url)
 

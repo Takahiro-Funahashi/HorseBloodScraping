@@ -263,12 +263,15 @@ class class_SQLite():
 
         for blood in data:
             for horse_key in blood:
-                sql_cmd = f'{select} Name FROM {HorseNameTbl} WHERE pkey = {horse_key}'
-                self.DBcursor.execute(sql_cmd)
-                horse_names = self.DBcursor.fetchall()
-                if horse_names:
-                    horse_name = horse_names[0][0]
-                    names.append(horse_name)
+                if horse_key:
+                    sql_cmd = f'{select} Name FROM {HorseNameTbl} WHERE pkey = {horse_key}'
+                    self.DBcursor.execute(sql_cmd)
+                    horse_names = self.DBcursor.fetchall()
+                    if horse_names:
+                        horse_name = horse_names[0][0]
+                        names.append(horse_name)
+                else:
+                    names.append(None)
 
         self.disconnect_DB()
 
@@ -328,6 +331,8 @@ class class_SQLite():
 
 if __name__ == '__main__':
     obj = class_SQLite()
+    names = obj.get_horse_bloode(3520)
+    print(names)
 
     def set_horse_pedigree(obj):
         obj.connect_DB()
