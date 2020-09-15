@@ -21,6 +21,8 @@ delete = 'DELETE'
 HorseNameTbl = 'HorseNameTbl'
 HorseBloodTbl = 'HorseBloodTbl'
 RequestTbl = 'RequestTbl'
+RaceTbl = 'RaceTbl'
+RequestRaceTbl = 'RequestRaceTbl'
 
 class class_SQLite():
     def __init__(self):
@@ -31,10 +33,14 @@ class class_SQLite():
         ret = pathlib.Path(path).mkdir(parents=True, exist_ok=True)
         self.database_name = path + '\\HorseBlood.db'
         self.link_dict_after = dict()
+        self.link_dict_race_after = dict()
         return
 
     def set_link_dict(self,link_dict):
         self.link_dict_after = copy.deepcopy(link_dict)
+
+    def set_link_dict_race(self,link_dict):
+        self.link_dict_race_after = copy.deepcopy(link_dict)
 
     def connect_DB(self):
         self.DBconnect = sqlite3.connect(self.database_name)
@@ -106,6 +112,30 @@ class class_SQLite():
         sql_cmd = sql_cmd + f',"Name" TEXT {not_null}'
         sql_cmd = sql_cmd + f',"URL" TEXT '
         sql_cmd = sql_cmd + f',"horse_pkey" INTEGER {default} {null})'
+
+        self.DBcursor.execute(sql_cmd)
+
+    def create_Race_Tbl(self):
+        sql_cmd = f'CREATE TABLE IF NOT EXISTS "{RaceTbl}" '
+        sql_cmd = sql_cmd + \
+            f'("pkey" INTEGER {not_null} {primary_key} {auto_increment} {uniaue}'
+        sql_cmd = sql_cmd + f',"Name" TEXT '
+        sql_cmd = sql_cmd + f',"Date" TEXT '
+        sql_cmd = sql_cmd + f',"Held" TEXT '
+        sql_cmd = sql_cmd + f',"RaceNumber" TEXT '
+        sql_cmd = sql_cmd + f',"URL" TEXT )'
+
+        self.DBcursor.execute(sql_cmd)
+
+        return
+
+    def create_Request_Race_Tbl(self):
+        sql_cmd = f'CREATE TABLE IF NOT EXISTS "{RequestRaceTbl}" '
+        sql_cmd = sql_cmd + \
+            f'("pkey" INTEGER {not_null} {primary_key} {auto_increment} {uniaue}'
+        sql_cmd = sql_cmd + f',"Name" TEXT {not_null}'
+        sql_cmd = sql_cmd + f',"URL" TEXT '
+        sql_cmd = sql_cmd + f',"race_pkey" INTEGER {default} {null})'
 
         self.DBcursor.execute(sql_cmd)
 
@@ -196,25 +226,99 @@ class class_SQLite():
 
         self.link_dict_after = copy.deepcopy(link_dict)
 
-        tbl_name = 'RequestTbl'
-
         for k, v in add_dict.items():
             url, key = v
             #sql_cmd = f'{select} * FROM {tbl_name} WHERE Name = "{k}" AND URL = "{v}"'
-            sql_cmd = f'{select} * FROM {tbl_name} WHERE Name = "{k}" AND horse_pkey = {key}'
+            sql_cmd = f'{select} * FROM {RequestTbl} WHERE Name = "{k}" AND horse_pkey = {key}'
             self.DBcursor.execute(sql_cmd)
             TblInfo = self.DBcursor.fetchall()
             if TblInfo:
                 pkey = TblInfo[0][0]
-                sql_cmd = f'{update} {tbl_name} SET (Name,URL,horse_pkey) = ("{k}","{url}",{key}) WHERE pkey={pkey}'
+                sql_cmd = f'{update} {RequestTbl} SET (Name,URL,horse_pkey) = ("{k}","{url}",{key}) WHERE pkey={pkey}'
             else:
-                sql_cmd = f'{insert} {tbl_name} (Name,URL,horse_pkey) VALUES ("{k}","{url}",{key})'
+                sql_cmd = f'{insert} {RequestTbl} (Name,URL,horse_pkey) VALUES ("{k}","{url}",{key})'
 
             self.DBcursor.execute(sql_cmd)
 
         for k, v in remove_dict.items():
             url, key = v
-            sql_cmd = f'{delete} FROM {tbl_name} WHERE Name = "{k}" AND horse_pkey = {key}'
+            sql_cmd = f'{delete} FROM {RequestTbl} WHERE Name = "{k}" AND horse_pkey = {key}'
+            self.DBcursor.execute(sql_cmd)
+
+        return
+
+    def replace_Race_Tbl(self,RaceName,RaceDate,RaceHeld,RaceNumber,url,race_pkey):
+        if RaceName is None:
+            RaceName = f'{null}'
+        if RaceDate is None:
+            RaceDate = f'{null}'
+        if RaceHeld is None:
+            RaceHeld = f'{null}'
+        if RaceNumber is None:
+            RaceNumber = f'{null}'
+        if url is None:
+            url = f'{null}'
+
+        if race_pkey is None:
+            sql_cmd = f'{select} * FROM {RaceTbl} WHERE Name = "{RaceName}" AND URL = "{url}"'
+        else:
+            sql_cmd = f'{select} * FROM {RaceTbl} WHERE pkey = "{race_pkey}"'
+        self.DBcursor.execute(sql_cmd)
+        TblInfo = self.DBcursor.fetchall()
+
+        if TblInfo:
+            pkey = TblInfo[0][0]
+            if TblInfo[0][2] != 'NULL' and TblInfo[0][2]:
+                Birthday = TblInfo[0][2]
+            sql_cmd = f'{update} {RaceTbl} SET (Name,Date,Held,RaceNumber,URL) = ' \
+                + f'("{RaceName}","{RaceDate}","{RaceHeld}","{RaceNumber}","{url}") WHERE pkey={pkey}'
+            self.DBcursor.execute(sql_cmd)
+        else:
+            sql_cmd = f'{insert} {RaceTbl} (Name,Date,Held,RaceNumber,URL) VALUES ' +\
+                f'("{RaceName}","{RaceDate}","{RaceHeld}","{RaceNumber}","{url}")'
+            self.DBcursor.execute(sql_cmd)
+
+            sql_cmd = f'{select} pkey FROM {RaceTbl} WHERE rowid = last_insert_rowid()'
+            self.DBcursor.execute(sql_cmd)
+
+            TblInfo = self.DBcursor.fetchall()
+            if TblInfo:
+                pkey = TblInfo[0][0]
+
+        return pkey
+
+    def replace_request_Race_Tbl(self,link_dict):
+
+        add_dict = dict()
+        remove_dict = dict()
+
+        for k, v in link_dict.items():
+            if k not in self.link_dict_race_after:
+                add_dict.setdefault(k, v)
+
+        for k, v in self.link_dict_race_after.items():
+            if k not in link_dict:
+                remove_dict.setdefault(k, v)
+
+        self.link_dict_race_after = copy.deepcopy(link_dict)
+
+        for k, v in add_dict.items():
+            url, key = v
+            #sql_cmd = f'{select} * FROM {tbl_name} WHERE Name = "{k}" AND URL = "{v}"'
+            sql_cmd = f'{select} * FROM {RequestRaceTbl} WHERE Name = "{k}" AND race_pkey = {key}'
+            self.DBcursor.execute(sql_cmd)
+            TblInfo = self.DBcursor.fetchall()
+            if TblInfo:
+                pkey = TblInfo[0][0]
+                sql_cmd = f'{update} {RequestRaceTbl} SET (Name,URL,race_pkey) = ("{k}","{url}",{key}) WHERE pkey={pkey}'
+            else:
+                sql_cmd = f'{insert} {RequestRaceTbl} (Name,URL,race_pkey) VALUES ("{k}","{url}",{key})'
+
+            self.DBcursor.execute(sql_cmd)
+
+        for k, v in remove_dict.items():
+            url, key = v
+            sql_cmd = f'{delete} FROM {RequestRaceTbl} WHERE Name = "{k}" AND race_pkey = {key}'
             self.DBcursor.execute(sql_cmd)
 
         return
@@ -234,7 +338,22 @@ class class_SQLite():
 
         return self.link_dict_after
 
-    def get_HorseURL_Tbl(self,url):
+    def get_request_RaceTbl(self):
+        self.connect_DB()
+
+        tbl_name = 'RequestRaceTbl'
+        sql_cmd = f'{select} Name,URL,race_pkey FROM {tbl_name}'
+        self.DBcursor.execute(sql_cmd)
+        TblInfo = self.DBcursor.fetchall()
+        if TblInfo:
+            for Name,URL,race_pkey in TblInfo:
+                self.link_dict_race_after.setdefault(Name,[URL,race_pkey])
+
+        self.disconnect_DB()
+
+        return self.link_dict_race_after
+
+    def chk_HorseURL_Tbl(self,url):
         self.connect_DB()
 
         sql_cmd = f'{select} * FROM {HorseNameTbl} WHERE URL = "{url}" AND NOT Birthday = "{null}"'
@@ -248,7 +367,45 @@ class class_SQLite():
         else:
             return False
 
-    def get_horse_bloode(self,horse_pkey):
+    def get_HorseURL_Tbl(self,horse_pkey=None,Name=None,url=None,limit_number=None):
+        isWhere = False
+        self.connect_DB()
+
+        sql_cmd = f'{select} * FROM {HorseNameTbl} '
+        if horse_pkey is not None:
+            if isinstance(horse_pkey,int):
+                sql_cmd += f'WHERE pkey={horse_pkey} '
+                isWhere = True
+        if Name is not None:
+            if isinstance(Name,str):
+                if isWhere:
+                    sql_cmd += f'AND Name={Name} '
+                else:
+                    sql_cmd += f'WHERE Name={Name} '
+                isWhere = True
+        if url is not None:
+            if isinstance(url,str):
+                if isWhere:
+                    sql_cmd += f'AND URL={url} '
+                else:
+                    sql_cmd += f'WHERE URL={url} '
+        if limit_number is not None:
+            if isinstance(limit_number,int):
+                sql_cmd += f'LIMIT {limit_number} '
+
+        self.DBcursor.execute(sql_cmd)
+        TblInfo = self.DBcursor.fetchall()
+
+        HorseNameData = dict()
+        for d in TblInfo:
+            HorseNameData.setdefault(d[1],{'pkey':d[0],'Birthday':d[2],'url':d[3]})
+
+
+        self.disconnect_DB()
+
+        return HorseNameData
+
+    def get_horse_blood(self,horse_pkey):
         names = list()
 
         self.connect_DB()
@@ -343,7 +500,7 @@ class class_SQLite():
 
 if __name__ == '__main__':
     obj = class_SQLite()
-    names = obj.get_horse_bloode(3520)
+    names = obj.get_horse_blood(3520)
     print(names)
 
     def set_horse_pedigree(obj):
@@ -369,7 +526,7 @@ if __name__ == '__main__':
 
         for horse in horse_list:
             horse_key = horse[0]
-            names = obj.get_horse_bloode(horse_key)
+            names = obj.get_horse_blood(horse_key)
             print(names)
 
 
