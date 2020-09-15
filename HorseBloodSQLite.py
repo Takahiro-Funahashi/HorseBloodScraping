@@ -1,6 +1,7 @@
 import copy
 import os
 import pathlib
+import platform
 import sqlite3
 
 unknown_mac = 'ffffffffffff'
@@ -27,11 +28,18 @@ RequestRaceTbl = 'RequestRaceTbl'
 class class_SQLite():
     def __init__(self):
         path = os.getcwd()
-        path = path + '\\data'
-        path = os.path.split(path)
-        path = path[0]
+        psys = platform.system()
+        if psys == 'Linux':
+            path = path + '/data'
+            pass
+        elif psys == 'Windows':
+            path = path + '\\data'
         ret = pathlib.Path(path).mkdir(parents=True, exist_ok=True)
-        self.database_name = path + '\\HorseBlood.db'
+        if psys == 'Linux':
+            self.database_name = path + '/HorseBlood.db'
+        elif psys == 'Windows':
+            self.database_name = path + '\\HorseBlood.db'
+
         self.link_dict_after = dict()
         self.link_dict_race_after = dict()
         return
