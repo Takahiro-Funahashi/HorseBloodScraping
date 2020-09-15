@@ -168,20 +168,9 @@ class HorseData_scraping():
         # 前回の続きのリクエストリストを取得
         link_dict = self.DB.get_request_Tbl()
 
-        def get_next(link_dict):
-            next_horse = url = pkey = None
-            ans = list(link_dict.keys())
-            if ans:
-                next_horse = ans[0]
-                url = link_dict[next_horse][0]
-                pkey = link_dict[next_horse][1]
-                link_dict.pop(next_horse)
-
-            return next_horse,url,pkey
-
         if link_dict:
             self.DB.set_link_dict(link_dict)
-            next_horse,url,horse_pkey = get_next(link_dict)
+            next_horse,url,horse_pkey = self._get_next_(link_dict)
 
         print('スクレイピングを開始します。')
 
@@ -193,23 +182,22 @@ class HorseData_scraping():
             #time.sleep(self.interval_time)
             link_dict = self.get_HorseInfo(url,horse_pkey,link_dict)
 
-            while(True):
-                next_horse, url, horse_pkey = get_next(link_dict)
-                if not self.DB.get_HorseURL_Tbl(url) and url and url != 'None':
-                    break
-                if not url or url == 'None':
-                    print(next_horse,'URLがないか異常のため、スキップします。')
-                else:
-                    print(next_horse,'既に登録されているため、スキップします。')
+            next_horse, url, horse_pkey = self._next_horse_(link_dict)
 
             print(len(link_dict))
             if len(link_dict) == 0:
-                break
-
-            if next_horse in horse_name:
-                horse_name[next_horse] = horse_name[next_horse] +1
+                link_dict = self.DB.get_request_Tbl()
+                if len(link_dict) == 0:
+                    break
+                else:
+                    next_horse, url, horse_pkey = self._next_horse_(link_dict)
+                    if next_horse is None or url is None or horse_pkey is None:
+                        break
             else:
-                horse_name.setdefault(next_horse,1)
+                if next_horse in horse_name:
+                    horse_name[next_horse] = horse_name[next_horse] +1
+                else:
+                    horse_name.setdefault(next_horse,1)
 
             ntime = time.time()
 
@@ -220,11 +208,40 @@ class HorseData_scraping():
 
         return
 
+    def _get_next_(self, link_dict):
+        next_horse = url = pkey = None
+        ans = list(link_dict.keys())
+        if ans:
+            next_horse = ans[0]
+            url = link_dict[next_horse][0]
+            pkey = link_dict[next_horse][1]
+            link_dict.pop(next_horse)
+
+        return next_horse,url,pkey
+
+    def _next_horse_(self,link_dict):
+        next_horse, url, horse_pkey = None, None, None
+        while(True):
+            next_horse, url, horse_pkey = self._get_next_(link_dict)
+            if not link_dict and not next_horse and not url and not horse_pkey:
+                # 全てスキップになった場合にRequestTblをクリア
+                self.DB.clear_Request_Tbl()
+                break
+            if not self.DB.get_HorseURL_Tbl(url) and url and url != 'None':
+                break
+            if not url or url == 'None':
+                print(next_horse,'URLがないか異常のため、スキップします。')
+            else:
+                print(next_horse,'既に登録されているため、スキップします。')
+
+        return (next_horse, url, horse_pkey)
+
 if __name__ == '__main__':
-    start_url = "https://db.netkeiba.com/horse/2002100816/"
+    #start_url = "https://db.netkeiba.com/horse/2002100816/"
     #start_url = "https://db.netkeiba.com/horse/000a015efd/"
     #start_url = "https://db.netkeiba.com/horse/000a00111d/"
-    start_url = "https://db.netkeiba.com/horse/000a015b48/"
+    #start_url = "https://db.netkeiba.com/horse/000a015b48/"
+    start_url = "https://db.netkeiba.com/horse/1990103355/"
 
     hScr = HorseData_scraping(limit_time=3000)
     hScr.run(start_url)

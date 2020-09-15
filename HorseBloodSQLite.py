@@ -323,6 +323,18 @@ class class_SQLite():
         self.connect_DB()
 
         sql_cmd = f'{update} {HorseNameTbl} SET (Name) = ("{horse_name}") WHERE URL = url'
+        self.DBcursor.execute(sql_cmd)
+
+        self.commit_DB()
+        self.disconnect_DB()
+
+        return
+
+    def clear_Request_Tbl(self):
+        self.connect_DB()
+
+        sql_cmd = f'{delete} FROM {RequestTbl}'
+        self.DBcursor.execute(sql_cmd)
 
         self.commit_DB()
         self.disconnect_DB()
