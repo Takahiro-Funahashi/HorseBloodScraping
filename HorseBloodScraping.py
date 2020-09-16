@@ -4,8 +4,9 @@ from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 
 import dill
+import os
+import platform
 import requests
-
 import time
 
 import HorseBloodSQLite as HBDB
@@ -373,41 +374,215 @@ class HorseData_scraping():
         self.DB.commit_DB()
         self.DB.disconnect_DB()
 
+        return u_link_dict
 
-        '''
-        HorseNameData = self.DB.get_HorseURL_Tbl(limit_number = 1)
+    def _temp_FileIO(self,url:str,mode:str='wr'):
+        """ URLアクセスし取得したrequestsオブジェクトを読み書き
+            URLアクセスし取得したrequestsオブジェクトをシリアル化して一時ファイルに保存/読込をする。
+            デバッグのために何度もアクセスしなくても良くなる。
 
-        for horse_name, val in HorseNameData.items():
-            url = val['url']
+        Args:
+            url (str): URL
+            mode (str, optional): [description]. Defaults to 'wr'.
 
+        Returns:
+            [type]: [description]
+        """
+
+        if mode not in ['r','w','wr']:
+            return False
+
+        soup = response = None
+
+        if 'w' in mode:
             response = requests.get(url,headers=self.header,timeout=self.time_out)
             response.encoding = response.apparent_encoding
             enc = cchardet.detect(response.content)
             encoding = enc['encoding']
 
-            print('access:%-16s:%s' % (horse_name,url))
+        path = os.getcwd()
+        psys = platform.system()
+        if psys == 'Linux':
+            html_path = path +'/_temp_/_temp_.html'
+            path = path + '/_temp_/_temp_soup_.pickle'
+            pass
+        elif psys == 'Windows':
+            html_path = path +'\\_temp_\\_temp_.html'
+            path = path + '\\_temp_\\_temp_soup_.pickle'
 
-            with open('_temp_soup_.pickle', 'wb') as fp:
+        if 'w' in mode:
+            with open(path, 'wb') as fp:
                 dill.dump(response,fp)
-        '''
-        '''
-        with open('_temp_soup_.pickle', 'rb') as fp:
-            response = dill.load(fp)
-            soup = BeautifulSoup(response.text, "html.parser")
-        '''
+            with open(html_path, 'w') as fp:
+                fp.write(response.text)
 
-        return u_link_dict
+        if 'r' in mode:
+            with open(path, 'rb') as fp:
+                response = dill.load(fp)
+        if response is not None:
+            soup = BeautifulSoup(response.text, "html.parser")
+
+        return soup
+
+    def _try_analysis(self,soup):
+        _race_conditions_ = ['距離/周回方向','天候','コース状態','発送時間']
+        race_name = None
+        race_conditions = None
+
+        #====================================
+        # レース名、レースの条件等を取得
+        race_title = soup.find('dl',class_='racedata fc')
+        if race_title:
+            race_title_name = race_title.find('h1')
+            if race_title_name:
+                race_name = race_title_name.get_text()
+            _conditions = race_title.find('span')
+            if _conditions:
+                _conditions = _conditions.get_text()
+                _conditions = _conditions.split('\xa0/\xa0')
+                if len(_race_conditions_) == len(_conditions):
+                    race_conditions = dict()
+                    _course_type_ = None
+                    for key, con in zip(_race_conditions_,_conditions):
+                        _r_ = con.split(':',maxsplit = 1)
+                        if len(_r_) > 1:
+                            race_conditions.setdefault(key,_r_[1].strip())
+                            if key == 'コース状態':
+                                _course_type_ = _r_[0].strip()
+                        else:
+                            race_conditions.setdefault(key,_r_[0])
+                    else:
+                        if _course_type_:
+                            race_conditions.setdefault('コース種別',_course_type_)
+                            _race_ = race_conditions[_race_conditions_[0]]
+                            _race_ = _race_.lstrip(_course_type_[0])
+                            _direction_ = _race_[0]
+                            _distance_ = _race_[1:]
+                            race_conditions.setdefault('距離',_distance_)
+                            race_conditions.setdefault('周回方向',_direction_)
+                            race_conditions.pop(_race_conditions_[0])
+
+        _race_class = soup.find('div',class_='data_intro')
+
+        race_date, race_held, race_class, race_limited = None, None, None, None
+        _race_class = _race_class.find('p',class_='smalltxt')
+        if _race_class:
+            _race_class = _race_class.get_text()
+            _race_class = _race_class.split('\xa0\xa0')
+            if len(_race_class) >= 2:
+                race_date_held_class = _race_class[0]
+                r = race_date_held_class.split()
+                if len(r) == 3:
+                    race_date, race_held, race_class = r
+                race_limited = _race_class[1]
+
+        if 1:
+            print(race_name,race_conditions)
+            print(race_date, race_held, race_class,race_limited)
+
+        #====================================
+
+        #====================================
+        # レース結果を取得
+        race_r_clms, result_data = None, None
+        horse_link_list, jockey_link_list, trainer_link_list, owner_link_list = \
+            list(), list(), list(),list()
+
+        _race_results_ = soup.find('table',class_='race_table_01 nk_tb_common')
+        if _race_results_:
+            _race_results_clms = _race_results_.find('tr',class_='txt_c')
+            if _race_results_clms:
+                _race_results_clms = _race_results_clms.find_all('th')
+                if _race_results_clms:
+                    race_r_clms = [ clm.get_text() for clm in _race_results_clms]
+            _race_results_rows = _race_results_.find_all('tr')
+            if _race_results_rows:
+                result_data = list()
+                for row in _race_results_rows:
+                    row_clms = row.find_all('td')
+                    if row_clms:
+                        set_dict = dict()
+                        _result_data_ = list()
+                        horse_link, jockey_link, trainer_link, owner_link = None,None,None,None
+
+                        for clm in row_clms:
+                            _text_ = clm.get_text().strip()
+                            alink = clm.find('a')
+                            if alink:
+                                link = alink.attrs['href']
+                                if '/horse/' in link:
+                                    horse_link = "https://db.netkeiba.com" + link
+                                    horse_link_list.append({_text_:horse_link})
+                                if '/jockey/' in link:
+                                    jockey_link = "https://db.netkeiba.com" + link
+                                    jockey_link_list.append({_text_:jockey_link})
+                                if '/trainer/' in link:
+                                    trainer_link = "https://db.netkeiba.com" + link
+                                    _t_ = clm.find('a')
+                                    if _t_:
+                                        _text_ = _t_.get_text()
+                                    trainer_link_list.append({_text_:trainer_link})
+                                if '/owner/' in link:
+                                    owner_link = "https://db.netkeiba.com" + link
+                                    owner_link_list.append({_text_:owner_link})
+                            _result_data_.append(_text_)
+                        for ct, r in zip(race_r_clms,_result_data_):
+                            set_dict.setdefault(ct,r)
+                        else:
+                            result_data.append(set_dict)
+        if 1:
+            for d in result_data:
+                print(d)
+
+            print(horse_link_list)
+            print(jockey_link_list)
+            print(trainer_link)
+            print(owner_link_list)
+
+        #====================================
+
+        #====================================
+        # レース通過順位を取得
+        passing_order_list = list()
+        _passing_order_ = soup.find('table',class_='result_table_02',summary="コーナー通過順位")
+        if _passing_order_:
+            _corners_ = _passing_order_.find_all('th')
+            _order_ = _passing_order_.find_all('td')
+            if _corners_ and _order_:
+                for c, o in zip(_corners_,_order_):
+                    passing_order_list.append({c.get_text():o.get_text()})
+
+        #====================================
+        # レースラップタイムを取得
+        lap_time_list = list()
+        _lap_time_ = soup.find('table',class_='result_table_02',summary="ラップタイム")
+        if _lap_time_:
+            _title_ = _lap_time_.find_all('th')
+            _time_ = _lap_time_.find_all('td')
+            if _title_ and _time_:
+                for t, tt in zip(_title_,_time_):
+                    lap_time_list.append({t.get_text():tt.get_text()})
+
+        print(passing_order_list)
+        print(lap_time_list)
+
+        return
+
 
 if __name__ == '__main__':
-    '''
-    #start_url = "https://db.netkeiba.com/horse/2002100816/"
-    #start_url = "https://db.netkeiba.com/horse/000a015efd/"
-    #start_url = "https://db.netkeiba.com/horse/000a00111d/"
-    #start_url = "https://db.netkeiba.com/horse/000a015b48/"
-    start_url = "https://db.netkeiba.com/horse/1990103355/"
-
     hScr = HorseData_scraping(limit_time=3000)
+    '''
+    #start_url = "https://db.netkeiba.com/horse/2002100816/" #ディープインパクト
+    #start_url = "https://db.netkeiba.com/horse/000a015efd/" #Old Bald Peg 簡易血統表なし
+    #start_url = "https://db.netkeiba.com/horse/000a015b48/" #Frolic 母母Sister 2 to Blastのプロフィールページ異常
+    #start_url = "https://db.netkeiba.com/horse/000a016741/" #Northumberland Arabian Mareのプロフィールページ異常
+
     hScr.run(start_url)
     '''
-    hScr = HorseData_scraping(limit_time=3000)
-    hScr.run_race_info()
+    #hScr.run_race_info()
+
+    start_url = "https://db.netkeiba.com/race/200606050809/" #第51回有馬記念(G1)
+    soup = hScr._temp_FileIO(start_url,'r')
+    hScr._try_analysis(soup)
+
+
