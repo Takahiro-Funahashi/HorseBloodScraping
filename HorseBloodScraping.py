@@ -6,6 +6,7 @@ from fake_useragent import UserAgent
 import dill
 import os
 import platform
+import re
 import requests
 import time
 
@@ -29,6 +30,54 @@ class HorseData_scraping():
         self.DB = HBDB.class_SQLite()
 
         return
+
+    def _temp_FileIO(self,url:str,mode:str='wr'):
+        """ URLアクセスし取得したrequestsオブジェクトを読み書き
+            URLアクセスし取得したrequestsオブジェクトをシリアル化して一時ファイルに保存/読込をする。
+            デバッグのために何度もアクセスしなくても良くなる。
+
+        Args:
+            url (str): URL
+            mode (str, optional): [description]. Defaults to 'wr'.
+
+        Returns:
+            [type]: [description]
+        """
+
+        if mode not in ['r','w','wr']:
+            return False
+
+        soup = response = None
+
+        if 'w' in mode:
+            response = requests.get(url,headers=self.header,timeout=self.time_out)
+            response.encoding = response.apparent_encoding
+            enc = cchardet.detect(response.content)
+            encoding = enc['encoding']
+
+        path = os.getcwd()
+        psys = platform.system()
+        if psys == 'Linux':
+            html_path = path +'/_temp_/_temp_.html'
+            path = path + '/_temp_/_temp_soup_.pickle'
+            pass
+        elif psys == 'Windows':
+            html_path = path +'\\_temp_\\_temp_.html'
+            path = path + '\\_temp_\\_temp_soup_.pickle'
+
+        if 'w' in mode:
+            with open(path, 'wb') as fp:
+                dill.dump(response,fp)
+            with open(html_path, 'w') as fp:
+                fp.write(response.text)
+
+        if 'r' in mode:
+            with open(path, 'rb') as fp:
+                response = dill.load(fp)
+        if response is not None:
+            soup = BeautifulSoup(response.text, "html.parser")
+
+        return soup
 
     def get_response(self,url):
         response = requests.get(url,headers=self.header,timeout=self.time_out)
@@ -176,6 +225,11 @@ class HorseData_scraping():
         self.DB.create_Horse_Tbl()
         self.DB.create_HorseBlood_Tbl()
         self.DB.create_Request_Tbl()
+        self.DB.create_Race_Tbl()
+        self.DB.create_Request_Race_Tbl()
+        self.DB.create_Request_Race_Ranking_Tbl()
+        self.DB.create_Jockey_Tbl()
+        self.DB.create_Owner_Tbl()
         self.DB.commit_DB()
         self.DB.disconnect_DB()
 
@@ -251,6 +305,9 @@ class HorseData_scraping():
         return (next_horse, url, horse_pkey)
 
     def run_race_info(self):
+        # HorseNameTblのみ取得した際に、HorseNameTblをRequestTblに複製し、
+        # RequestTblを削りながら、RaceTblに情報を書き込む
+
         horse_pkey = None
         link_dict = dict()
 
@@ -376,61 +433,17 @@ class HorseData_scraping():
 
         return u_link_dict
 
-    def _temp_FileIO(self,url:str,mode:str='wr'):
-        """ URLアクセスし取得したrequestsオブジェクトを読み書き
-            URLアクセスし取得したrequestsオブジェクトをシリアル化して一時ファイルに保存/読込をする。
-            デバッグのために何度もアクセスしなくても良くなる。
+    def analysis_RaceResult(self,soup):
+        race_info = dict()
 
-        Args:
-            url (str): URL
-            mode (str, optional): [description]. Defaults to 'wr'.
-
-        Returns:
-            [type]: [description]
-        """
-
-        if mode not in ['r','w','wr']:
-            return False
-
-        soup = response = None
-
-        if 'w' in mode:
-            response = requests.get(url,headers=self.header,timeout=self.time_out)
-            response.encoding = response.apparent_encoding
-            enc = cchardet.detect(response.content)
-            encoding = enc['encoding']
-
-        path = os.getcwd()
-        psys = platform.system()
-        if psys == 'Linux':
-            html_path = path +'/_temp_/_temp_.html'
-            path = path + '/_temp_/_temp_soup_.pickle'
-            pass
-        elif psys == 'Windows':
-            html_path = path +'\\_temp_\\_temp_.html'
-            path = path + '\\_temp_\\_temp_soup_.pickle'
-
-        if 'w' in mode:
-            with open(path, 'wb') as fp:
-                dill.dump(response,fp)
-            with open(html_path, 'w') as fp:
-                fp.write(response.text)
-
-        if 'r' in mode:
-            with open(path, 'rb') as fp:
-                response = dill.load(fp)
-        if response is not None:
-            soup = BeautifulSoup(response.text, "html.parser")
-
-        return soup
-
-    def _try_analysis(self,soup):
-        _race_conditions_ = ['距離/周回方向','天候','コース状態','発送時間']
+        race_info_title = ['レース名','開催地','開催日','距離','コース種別A','コース種別B','条件A','条件B','周回方向','グレード','芝状態','ダート状態','天候']
         race_name = None
         race_conditions = None
 
         #====================================
         # レース名、レースの条件等を取得
+        isDirection = False #周回方向があるかどうか
+
         race_title = soup.find('dl',class_='racedata fc')
         if race_title:
             race_title_name = race_title.find('h1')
@@ -439,28 +452,63 @@ class HorseData_scraping():
             _conditions = race_title.find('span')
             if _conditions:
                 _conditions = _conditions.get_text()
-                _conditions = _conditions.split('\xa0/\xa0')
-                if len(_race_conditions_) == len(_conditions):
+                _conditions = _conditions.split('\xa0')
+                _conditions = ' '.join(_conditions)
+                _conditions = _conditions.split('/')
+                _race_conditions_A_ = _race_conditions_B_ = _weather_ = None
+                if _conditions:
                     race_conditions = dict()
-                    _course_type_ = None
-                    for key, con in zip(_race_conditions_,_conditions):
-                        _r_ = con.split(':',maxsplit = 1)
-                        if len(_r_) > 1:
-                            race_conditions.setdefault(key,_r_[1].strip())
-                            if key == 'コース状態':
-                                _course_type_ = _r_[0].strip()
-                        else:
-                            race_conditions.setdefault(key,_r_[0])
+                    if '障' in _conditions[0]:
+                        _course_type_A_ = '障害'
+                        _course_type_B_ = '芝/ダート'
+                        isDirection = False
+                        _distance_ = _conditions[0].lstrip('障芝 ダート')
                     else:
-                        if _course_type_:
-                            race_conditions.setdefault('コース種別',_course_type_)
-                            _race_ = race_conditions[_race_conditions_[0]]
-                            _race_ = _race_.lstrip(_course_type_[0])
-                            _direction_ = _race_[0]
-                            _distance_ = _race_[1:]
-                            race_conditions.setdefault('距離',_distance_)
-                            race_conditions.setdefault('周回方向',_direction_)
-                            race_conditions.pop(_race_conditions_[0])
+                        _course_type_A_ = '平地'
+                        isDirection = True
+                        if 'ダ' in _conditions[0]:
+                            _dd_ = _conditions[0].lstrip('ダ')
+                            _course_type_B_ = 'ダート'
+                        elif '芝' in _conditions[0]:
+                            _dd_ = _conditions[0].lstrip('芝')
+                            _course_type_B_ = '芝'
+                        else:
+                            return
+                        _direction_ = _dd_[0]
+                        _distance_ = _dd_[1:]
+
+                    _w_ = _conditions[1].split(':')
+                    if len(_w_) >= 2:
+                        _weather_ = _w_[1].strip()
+
+                    _ct_ = _conditions[2].split(':')
+                    if len(_ct_) == 2:
+                        if _course_type_B_ == '芝':
+                            _race_conditions_A_ = _ct_[1].strip()
+                            _race_conditions_B_ = None
+                        elif _course_type_B_ == 'ダート':
+                            _race_conditions_A_ = None
+                            _race_conditions_B_ = _ct_[1].strip()
+                    elif len(_ct_) > 2:
+                        _cct_ = _ct_[1].split()
+                        if len(_cct_) >= 2:
+                            _race_conditions_A_ = _cct_[0].strip()
+                        _race_conditions_B_ = _ct_[2].strip()
+
+                    _time_ = _conditions[3].split(':',maxsplit = 1)
+                    if _time_:
+                        if len(_time_) >= 2:
+                            _time_ = _time_[1].strip()
+                        else:
+                            _time_ = _time_[0]
+
+                    race_conditions.setdefault('レース名',race_name)
+                    race_conditions.setdefault('距離',_distance_)
+                    race_conditions.setdefault('コース種別A',_course_type_A_)
+                    race_conditions.setdefault('コース種別B',_course_type_B_)
+                    race_conditions.setdefault('芝状態',_race_conditions_A_)
+                    race_conditions.setdefault('ダート状態',_race_conditions_B_)
+                    race_conditions.setdefault('天候',_weather_)
 
         _race_class = soup.find('div',class_='data_intro')
 
@@ -475,10 +523,20 @@ class HorseData_scraping():
                 if len(r) == 3:
                     race_date, race_held, race_class = r
                 race_limited = _race_class[1]
+                if isinstance(race_conditions,dict):
+                    race_conditions.setdefault('条件A',race_class)
+                    race_conditions.setdefault('条件B',race_limited)
+                    race_conditions.setdefault('開催地',race_held)
+                    race_conditions.setdefault('開催日',race_date)
 
-        if 1:
-            print(race_name,race_conditions)
-            print(race_date, race_held, race_class,race_limited)
+                    grade_chk = race_name[-4:]
+                    grade_re = re.compile(r'[(]G[1-3][)]')
+                    res = grade_re.match(grade_chk)
+                    if res:
+                        _grade_ =res.group()
+                        race_conditions.setdefault('グレード',_grade_)
+                    else:
+                        race_conditions.setdefault('グレード',None)
 
         #====================================
 
@@ -530,14 +588,6 @@ class HorseData_scraping():
                             set_dict.setdefault(ct,r)
                         else:
                             result_data.append(set_dict)
-        if 1:
-            for d in result_data:
-                print(d)
-
-            print(horse_link_list)
-            print(jockey_link_list)
-            print(trainer_link)
-            print(owner_link_list)
 
         #====================================
 
@@ -563,11 +613,127 @@ class HorseData_scraping():
                 for t, tt in zip(_title_,_time_):
                     lap_time_list.append({t.get_text():tt.get_text()})
 
-        print(passing_order_list)
-        print(lap_time_list)
+        race_info.setdefault('基本情報',race_conditions)
+        race_info.setdefault('レース結果',result_data)
+        race_info.setdefault('通過順位',passing_order_list)
+        race_info.setdefault('ラップタイム',lap_time_list)
+        race_info.setdefault('Link',
+            {
+                '馬':horse_link_list,
+                '騎手':jockey_link_list,
+                '調教師':trainer_link_list,
+                '馬主':owner_link_list,
+                }
+        )
 
+        #print(race_info)
+
+        return race_info
+
+    def run_race_result_info(self):
+        self.DB.connect_DB()
+        self.DB.create_Race_Tbl()
+        self.DB.create_Request_Race_Tbl()
+        self.DB.create_Request_Race_Ranking_Tbl()
+        self.DB.create_Jockey_Tbl()
+        self.DB.create_Owner_Tbl()
+        self.DB.create_Trainer_Tbl()
+        self.DB.commit_DB()
+        self.DB.disconnect_DB()
+
+        RaceNameData = self.DB.get_RaceURL_Tbl()
+
+        r_link_dict = dict()
+        for pkey, val in RaceNameData.items():
+            r_link_dict.setdefault(pkey,[val['url']])
+
+        u_link_dict = dict()
+        if u_link_dict:
+            self.DB.set_link_dict(u_link_dict)
+
+        while(True):
+            keylist = list(r_link_dict.keys())
+            if keylist:
+                race_pkey = keylist[0]
+                race_url = r_link_dict[race_pkey][0]
+                r_link_dict.pop(race_pkey)
+            else:
+                break
+
+
+            soup = self.get_response(race_url)
+            race_info = self.analysis_RaceResult(soup)
+
+            self.DB.connect_DB()
+
+            if isinstance(race_info,dict):
+                base_info, passing_info, time_info = None, None, None
+                if '基本情報' in race_info:
+                    print(race_info['基本情報'])
+                    base_info = race_info['基本情報']
+                    if '通過順位' in race_info:
+                        passing = race_info['通過順位']
+                        passing_info = list()
+                        keys = ['1コーナー','2コーナー','3コーナー','4コーナー']
+                        for corner in passing:
+                            k = list(corner.keys())[0]
+                            if k in keys:
+                                index = keys.index(k)
+                                while(len(passing_info) <= index-1):
+                                    passing_info.append('')
+                            v = list(corner.values())[0]
+                            passing_info.append(v)
+                    if 'ラップタイム' in race_info:
+                        _times_ = race_info['ラップタイム']
+                        time_info = list()
+                        for _t_ in _times_:
+                            v = list(_t_.values())[0]
+                            time_info.append(v)
+                    self.DB.replace_Request_Race_Tbl(race_pkey,base_info, passing_info, time_info)
+
+                horse_link_list = jockey_link_list = trainer_link_list = owner_link_list = None
+                if 'Link' in race_info:
+                    Links = race_info['Link']
+                    if '馬' in Links:
+                        horse_link_list = Links['馬']
+                    if '騎手' in Links:
+                        jockey_link_list = Links['騎手']
+                    if '調教師' in Links:
+                        trainer_link_list = Links['調教師']
+                    if '馬主' in Links:
+                        owner_link_list = Links['馬主']
+
+                if horse_link_list:
+                    link_dict = dict()
+
+                    for horse in horse_link_list:
+                        if isinstance(horse,dict):
+                            horse_name = list(horse.keys())[0]
+                            horse_url = horse[horse_name]
+                            horse_pkey = self.DB.replace_Horse_Tbl(horse_name,None,horse_url,None)
+                            link_dict.setdefault(horse_name,[horse_url,horse_pkey])
+
+                    u_link_dict.update(link_dict)
+
+                    self.DB.replace_request_Tbl(u_link_dict)
+
+                if jockey_link_list:
+                    self.DB.replace_Jockey_Tbl(jockey_link_list)
+                if trainer_link_list:
+                    self.DB.replace_Trainer_Tbl(trainer_link_list)
+                if owner_link_list:
+                    self.DB.replace_Owner_Tbl(owner_link_list)
+
+                if 'レース結果' in race_info:
+                    race_ranking_info = race_info['レース結果']
+                    self.DB.replace_Request_RaceRanking_Tbl(
+                        race_pkey,race_ranking_info,
+                        horse_link_list,jockey_link_list,trainer_link_list,owner_link_list)
+                    pass
+
+            self.DB.commit_DB()
+            self.DB.disconnect_DB()
         return
-
 
 if __name__ == '__main__':
     hScr = HorseData_scraping(limit_time=3000)
@@ -581,8 +747,12 @@ if __name__ == '__main__':
     '''
     #hScr.run_race_info()
 
-    start_url = "https://db.netkeiba.com/race/200606050809/" #第51回有馬記念(G1)
-    soup = hScr._temp_FileIO(start_url,'r')
-    hScr._try_analysis(soup)
+    #start_url = "https://db.netkeiba.com/race/200606050809/" #第51回有馬記念(G1)
+    #start_url = "https://db.netkeiba.com/race/200609010804/" #障害4歳以上オープン
+    #soup = hScr._temp_FileIO(start_url,'wr')
+    #hScr.analysis_RaceResult(soup)
+
+    hScr.run_race_result_info()
+
 
 

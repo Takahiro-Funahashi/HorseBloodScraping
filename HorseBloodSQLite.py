@@ -24,6 +24,10 @@ HorseBloodTbl = 'HorseBloodTbl'
 RequestTbl = 'RequestTbl'
 RaceTbl = 'RaceTbl'
 RequestRaceTbl = 'RequestRaceTbl'
+RequestRaceRankingTbl = 'RequestRaceRankingTbl'
+JockeyTbl = 'JockeyTbl'
+TrainerTbl = 'TrainerTbl'
+OwnerTbl = 'OwnerTbl'
 
 class class_SQLite():
     def __init__(self):
@@ -141,11 +145,83 @@ class class_SQLite():
         sql_cmd = f'CREATE TABLE IF NOT EXISTS "{RequestRaceTbl}" '
         sql_cmd = sql_cmd + \
             f'("pkey" INTEGER {not_null} {primary_key} {auto_increment} {uniaue}'
-        sql_cmd = sql_cmd + f',"Name" TEXT {not_null}'
-        sql_cmd = sql_cmd + f',"URL" TEXT '
-        sql_cmd = sql_cmd + f',"race_pkey" INTEGER {default} {null})'
+        sql_cmd = sql_cmd + f',"race_pkey" INTEGER {default} {null}'
+        sql_cmd = sql_cmd + f',"held" TEXT '
+        sql_cmd = sql_cmd + f',"date" TEXT '
+        sql_cmd = sql_cmd + f',"race_grade" TEXT '
+        sql_cmd = sql_cmd + f',"course_type_A_" TEXT '
+        sql_cmd = sql_cmd + f',"course_type_B" TEXT '
+        sql_cmd = sql_cmd + f',"turf_condition" TEXT '
+        sql_cmd = sql_cmd + f',"dirt_state" TEXT '
+        sql_cmd = sql_cmd + f',"weather" TEXT '
+        sql_cmd = sql_cmd + f',"race_conditions_A" TEXT '
+        sql_cmd = sql_cmd + f',"race_conditions_B" TEXT '
+        sql_cmd = sql_cmd + f',"race_ranking_corner_1" TEXT '
+        sql_cmd = sql_cmd + f',"race_ranking_corner_2" TEXT '
+        sql_cmd = sql_cmd + f',"race_ranking_corner_3" TEXT '
+        sql_cmd = sql_cmd + f',"race_ranking_corner_4" TEXT '
+        sql_cmd = sql_cmd + f',"race_laptime" TEXT '
+        sql_cmd = sql_cmd + f',"race_pace" TEXT '
+        sql_cmd = sql_cmd + f')'
 
         self.DBcursor.execute(sql_cmd)
+
+    def create_Request_Race_Ranking_Tbl(self):
+        sql_cmd = f'CREATE TABLE IF NOT EXISTS "{RequestRaceRankingTbl}" '
+        sql_cmd = sql_cmd + \
+            f'("pkey" INTEGER {not_null} {primary_key} {auto_increment} {uniaue}'
+        sql_cmd = sql_cmd + f',"race_pkey" INTEGER {default} {null}'
+        sql_cmd = sql_cmd + f',"ranking" TEXT '
+        sql_cmd = sql_cmd + f',"frame_number" TEXT '
+        sql_cmd = sql_cmd + f',"horse_number" TEXT '
+        sql_cmd = sql_cmd + f',"horse_pkey" INTEGER '
+        sql_cmd = sql_cmd + f',"sexual_age" TEXT '
+        sql_cmd = sql_cmd + f',"weight" TEXT '
+        sql_cmd = sql_cmd + f',"horse_weight" TEXT '
+        sql_cmd = sql_cmd + f',"time" TEXT '
+        sql_cmd = sql_cmd + f',"passing" TEXT '
+        sql_cmd = sql_cmd + f',"last_spurt" TEXT '
+        sql_cmd = sql_cmd + f',"jockey_pkey" INTEGER '
+        sql_cmd = sql_cmd + f',"trainer_pkey" INTEGER '
+        sql_cmd = sql_cmd + f',"owner_pkey" INTEGER '
+        sql_cmd = sql_cmd + f',"prize_money" TEXT '
+        sql_cmd = sql_cmd + f',"win_raito" TEXT '
+        sql_cmd = sql_cmd + f',"popular" TEXT )'
+
+        self.DBcursor.execute(sql_cmd)
+
+    def create_Jockey_Tbl(self):
+        sql_cmd = f'CREATE TABLE IF NOT EXISTS "{JockeyTbl}" '
+        sql_cmd = sql_cmd + \
+            f'("pkey" INTEGER {not_null} {primary_key} {auto_increment} {uniaue}'
+        sql_cmd = sql_cmd + f',"Name" TEXT '
+        sql_cmd = sql_cmd + f',"URL" TEXT )'
+
+        self.DBcursor.execute(sql_cmd)
+
+        return
+
+    def create_Trainer_Tbl(self):
+        sql_cmd = f'CREATE TABLE IF NOT EXISTS "{TrainerTbl}" '
+        sql_cmd = sql_cmd + \
+            f'("pkey" INTEGER {not_null} {primary_key} {auto_increment} {uniaue}'
+        sql_cmd = sql_cmd + f',"Name" TEXT '
+        sql_cmd = sql_cmd + f',"URL" TEXT )'
+
+        self.DBcursor.execute(sql_cmd)
+
+        return
+
+    def create_Owner_Tbl(self):
+        sql_cmd = f'CREATE TABLE IF NOT EXISTS "{OwnerTbl}" '
+        sql_cmd = sql_cmd + \
+            f'("pkey" INTEGER {not_null} {primary_key} {auto_increment} {uniaue}'
+        sql_cmd = sql_cmd + f',"Name" TEXT '
+        sql_cmd = sql_cmd + f',"URL" TEXT )'
+
+        self.DBcursor.execute(sql_cmd)
+
+        return
 
     def replace_Horse_Tbl(self,HorseName,Birthday,url,horse_pkey):
         if Birthday is None:
@@ -331,6 +407,430 @@ class class_SQLite():
 
         return
 
+    def replace_Jockey_Tbl(self,jockey_link_list):
+        if not jockey_link_list and not isinstance(jockey_link_list,list):
+            return
+
+        for jockey in jockey_link_list:
+            if isinstance(jockey,dict):
+                jockey_name = list(jockey.keys())[0]
+                jockey_url = jockey[jockey_name]
+
+                sql_cmd = f'{select} * FROM {JockeyTbl} WHERE Name = "{jockey_name}" AND URL = "{jockey_url}"'
+
+                self.DBcursor.execute(sql_cmd)
+                TblInfo = self.DBcursor.fetchall()
+
+                if TblInfo:
+                    pkey = TblInfo[0][0]
+                    sql_cmd = f'{update} {JockeyTbl} SET (Name,URL) = ("{jockey_name}","{jockey_url}") WHERE pkey={pkey}'
+                    self.DBcursor.execute(sql_cmd)
+                else:
+                    sql_cmd = f'{insert} {JockeyTbl} (Name,URL) VALUES ("{jockey_name}","{jockey_url}")'
+                    self.DBcursor.execute(sql_cmd)
+
+                    sql_cmd = f'{select} pkey FROM {JockeyTbl} WHERE rowid = last_insert_rowid()'
+                    self.DBcursor.execute(sql_cmd)
+
+                    TblInfo = self.DBcursor.fetchall()
+                    if TblInfo:
+                        pkey = TblInfo[0][0]
+
+        return
+
+    def replace_Trainer_Tbl(self,trainer_link):
+        if not trainer_link and not isinstance(trainer_link,list):
+            return
+
+        for trainer in trainer_link:
+            if isinstance(trainer,dict):
+                trainer_name = list(trainer.keys())[0]
+                trainer_url = trainer[trainer_name]
+
+                sql_cmd = f'{select} * FROM {TrainerTbl} WHERE Name = "{trainer_name}" AND URL = "{trainer_url}"'
+
+                self.DBcursor.execute(sql_cmd)
+                TblInfo = self.DBcursor.fetchall()
+
+                if TblInfo:
+                    pkey = TblInfo[0][0]
+                    sql_cmd = f'{update} {TrainerTbl} SET (Name,URL) = ("{trainer_name}","{trainer_url}") WHERE pkey={pkey}'
+                    self.DBcursor.execute(sql_cmd)
+                else:
+                    sql_cmd = f'{insert} {TrainerTbl} (Name,URL) VALUES ("{trainer_name}","{trainer_url}")'
+                    self.DBcursor.execute(sql_cmd)
+
+                    sql_cmd = f'{select} pkey FROM {TrainerTbl} WHERE rowid = last_insert_rowid()'
+                    self.DBcursor.execute(sql_cmd)
+
+                    TblInfo = self.DBcursor.fetchall()
+                    if TblInfo:
+                        pkey = TblInfo[0][0]
+
+        return
+
+    def replace_Owner_Tbl(self,owner_link_list):
+        if not owner_link_list and not isinstance(owner_link_list,list):
+            return
+
+        for owner in owner_link_list:
+            if isinstance(owner,dict):
+                owner_name = list(owner.keys())[0]
+                owner_url = owner[owner_name]
+
+                sql_cmd = f'{select} * FROM {OwnerTbl} WHERE Name = "{owner_name}" AND URL = "{owner_url}"'
+
+                self.DBcursor.execute(sql_cmd)
+                TblInfo = self.DBcursor.fetchall()
+
+                if TblInfo:
+                    pkey = TblInfo[0][0]
+                    sql_cmd = f'{update} {OwnerTbl} SET (Name,URL) = ("{owner_name}","{owner_url}") WHERE pkey={pkey}'
+                    self.DBcursor.execute(sql_cmd)
+                else:
+                    sql_cmd = f'{insert} {OwnerTbl} (Name,URL) VALUES ("{owner_name}","{owner_url}")'
+                    self.DBcursor.execute(sql_cmd)
+
+                    sql_cmd = f'{select} pkey FROM {OwnerTbl} WHERE rowid = last_insert_rowid()'
+                    self.DBcursor.execute(sql_cmd)
+
+                    TblInfo = self.DBcursor.fetchall()
+                    if TblInfo:
+                        pkey = TblInfo[0][0]
+
+        return
+
+    def replace_Request_Race_Tbl(self,race_pkey,base_info,passing_info,time_info):
+        if not race_pkey:
+            return
+
+        sql_cmd = f'{select} pkey FROM {RaceTbl} WHERE pkey = {race_pkey}'
+
+        self.DBcursor.execute(sql_cmd)
+        TblInfo = self.DBcursor.fetchall()
+
+        if TblInfo:
+            pkey = TblInfo[0][0]
+            sql_cmd = f'{select} * FROM {RequestRaceTbl} WHERE race_pkey = {pkey}'
+
+            self.DBcursor.execute(sql_cmd)
+            TblInfo = self.DBcursor.fetchall()
+
+            set_clm_name = 'race_pkey,held,date,race_grade,course_type_A_,course_type_B,' \
+                + 'turf_condition,dirt_state,weather,race_conditions_A,race_conditions_B'
+
+            if isinstance(base_info,dict):
+                held,date,race_grade,course_type_A_,course_type_B,\
+                turf_condition,dirt_state,weather,race_conditions_A,race_conditions_B = \
+                    None,None,None,None,None,None,None,None,None,None
+                if '開催地' in base_info:
+                    held = base_info['開催地']
+                if '開催日' in base_info:
+                    date = base_info['開催日']
+
+                if 'グレード' in base_info:
+                    race_grade = base_info['グレード']
+                if 'コース種別A' in base_info:
+                    course_type_A_ = base_info['コース種別A']
+                if 'コース種別B' in base_info:
+                    course_type_B = base_info['コース種別B']
+                if '芝状態' in base_info:
+                    turf_condition = base_info['芝状態']
+                if 'ダート状態' in base_info:
+                    dirt_state = base_info['ダート状態']
+                if '天候' in base_info:
+                    weather = base_info['天候']
+                if '条件A' in base_info:
+                    race_conditions_A = base_info['条件A']
+                if '条件B' in base_info:
+                    race_conditions_B = base_info['条件B']
+
+                set_param = f'{race_pkey}'
+
+                if held is None:
+                    held = f'{null}'
+                    set_param += f',{held}'
+                else:
+                    set_param += f',"{held}"'
+                if date is None:
+                    date = f'{null}'
+                    set_param += f',{date}'
+                else:
+                    set_param += f',"{date}"'
+                if race_grade is None:
+                    race_grade = f'{null}'
+                    set_param += f',{race_grade}'
+                else:
+                    set_param += f',"{race_grade}"'
+                if course_type_A_ is None:
+                    course_type_A_ = f'{null}'
+                    set_param += f',{course_type_A_}'
+                else:
+                    set_param += f',"{course_type_A_}"'
+                if course_type_B is None:
+                    course_type_B = f'{null}'
+                    set_param += f',{course_type_B}'
+                else:
+                    set_param += f',"{course_type_B}"'
+                if turf_condition is None:
+                    turf_condition = f'{null}'
+                    set_param += f',{turf_condition}'
+                else:
+                    set_param += f',"{turf_condition}"'
+                if dirt_state is None:
+                    dirt_state = f'{null}'
+                    set_param += f',{dirt_state}'
+                else:
+                    set_param += f',"{dirt_state}"'
+                if weather is None:
+                    weather = f'{null}'
+                    set_param += f',{weather}'
+                else:
+                    set_param += f',"{weather}"'
+                if race_conditions_A is None:
+                    race_conditions_A = f'{null}'
+                    set_param += f',{race_conditions_A}'
+                else:
+                    set_param += f',"{race_conditions_A}"'
+                if race_conditions_B is None:
+                    race_conditions_B = f'{null}'
+                    set_param += f',{race_conditions_B}'
+                else:
+                    set_param += f',"{race_conditions_B}"'
+
+            add_passing_clm_name = ',race_ranking_corner_1,race_ranking_corner_2,race_ranking_corner_3,race_ranking_corner_4'
+            add_time_clm_name = ',race_laptime,race_pace'
+            if passing_info:
+                set_clm_name += add_passing_clm_name
+                for passing in passing_info:
+                    if passing is None:
+                        set_param += f',{null}'
+                    else:
+                        set_param += f',"{passing}"'
+            if time_info:
+                set_clm_name += add_time_clm_name
+                for _t_ in time_info:
+                    if _t_ is None:
+                        set_param += f',{null}'
+                    else:
+                        set_param += f',"{_t_}"'
+
+            if TblInfo:
+                pkey = TblInfo[0][0]
+                sql_cmd = f'{update} {RequestRaceTbl} SET ({set_clm_name}) = ({set_param}) WHERE pkey={pkey}'
+                self.DBcursor.execute(sql_cmd)
+            else:
+                sql_cmd = f'{insert} {RequestRaceTbl} ({set_clm_name}) VALUES ({set_param})'
+                self.DBcursor.execute(sql_cmd)
+
+                sql_cmd = f'{select} pkey FROM {RequestRaceTbl} WHERE rowid = last_insert_rowid()'
+                self.DBcursor.execute(sql_cmd)
+
+                TblInfo = self.DBcursor.fetchall()
+                if TblInfo:
+                    pkey = TblInfo[0][0]
+
+        return pkey
+
+    def replace_Request_RaceRanking_Tbl(self,race_pkey,race_ranking_info,
+        horse_link_list,jockey_link_list,trainer_link_list,owner_link_list):
+        if not race_pkey:
+            return
+        horse_link = { list(h.keys())[0]:list(h.values())[0] for h in horse_link_list}
+        jocky_link = { list(h.keys())[0]:list(h.values())[0] for h in jockey_link_list}
+        trainer_link = { list(h.keys())[0]:list(h.values())[0] for h in trainer_link_list}
+        owner_link = { list(h.keys())[0]:list(h.values())[0] for h in owner_link_list}
+
+        sql_cmd = f'{select} pkey FROM {RaceTbl} WHERE pkey = {race_pkey}'
+
+        self.DBcursor.execute(sql_cmd)
+        TblInfo = self.DBcursor.fetchall()
+
+        if TblInfo:
+            race_pkey = TblInfo[0][0]
+
+            set_clm_name = 'race_pkey,ranking,frame_number,horse_number,horse_pkey,sexual_age,'\
+                + 'weight,horse_weight,time,passing,last_spurt,'\
+                + 'jockey_pkey,trainer_pkey,owner_pkey,prize_money,win_raito,popular'
+
+            if isinstance(race_ranking_info,list):
+                for race_ranking in race_ranking_info:
+
+                    ranking,frame_number,horse_number,horse_pkey,sexual_age = \
+                        None,None,None,None,None
+                    weight,horse_weight,_times_,passing,last_spurt = \
+                        None,None,None,None,None
+                    jockey_pkey,trainer_pkey,owner_pkey,prize_money,win_raito,popular = \
+                        None,None,None,None,None,None
+
+                    if '着順' in race_ranking:
+                        ranking = race_ranking['着順']
+                    if '枠番' in race_ranking:
+                        frame_number = race_ranking['枠番']
+                    if '馬番' in race_ranking:
+                        horse_number = race_ranking['馬番']
+                    if '馬名' in race_ranking:
+                        horse_name = race_ranking['馬名']
+                        if horse_name in horse_link:
+                            horse_url = horse_link[horse_name]
+                            sql_cmd = f'{select} pkey FROM {HorseNameTbl} WHERE Name = "{horse_name}" AND URL = "{horse_url}"'
+                            self.DBcursor.execute(sql_cmd)
+                            _horse_ = self.DBcursor.fetchall()
+                            if _horse_:
+                                horse_pkey = _horse_[0][0]
+                    if '性齢' in race_ranking:
+                        sexual_age = race_ranking['性齢']
+                    if '斤量' in race_ranking:
+                        weight = race_ranking['斤量']
+                    if '馬体重' in race_ranking:
+                        horse_weight = race_ranking['馬体重']
+                    if 'タイム' in race_ranking:
+                        _times_ = race_ranking['タイム']
+                    if '通過' in race_ranking:
+                        passing = race_ranking['通過']
+                    if '上り' in race_ranking:
+                        last_spurt = race_ranking['上り']
+                    if '騎手' in race_ranking:
+                        jocky_name = race_ranking['騎手']
+                        if jocky_name in jocky_link:
+                            jocky_url = jocky_link[jocky_name]
+                            sql_cmd = f'{select} pkey FROM {JockeyTbl} WHERE Name = "{jocky_name}" AND URL = "{jocky_url}"'
+                            self.DBcursor.execute(sql_cmd)
+                            _jocky_ = self.DBcursor.fetchall()
+                            if _jocky_:
+                                jockey_pkey = _jocky_[0][0]
+                    if '調教師' in race_ranking:
+                        trainer_name = race_ranking['調教師']
+                        if trainer_name in trainer_link:
+                            trainer_url = trainer_link[trainer_name]
+                            sql_cmd = f'{select} pkey FROM {TrainerTbl} WHERE Name = "{trainer_name}" AND URL = "{trainer_url}"'
+                            self.DBcursor.execute(sql_cmd)
+                            _trainer_ = self.DBcursor.fetchall()
+                            if _trainer_:
+                                trainer_pkey = _trainer_[0][0]
+                    if '馬主' in race_ranking:
+                        owner_name = race_ranking['馬主']
+                        if owner_name in owner_link:
+                            owner_url = owner_link[owner_name]
+                            sql_cmd = f'{select} pkey FROM {OwnerTbl} WHERE Name = "{owner_name}" AND URL = "{owner_url}"'
+                            self.DBcursor.execute(sql_cmd)
+                            _owner_ = self.DBcursor.fetchall()
+                            if _owner_:
+                                owner_pkey = _owner_[0][0]
+                    if '賞金(万円)' in race_ranking:
+                        prize_money = race_ranking['賞金(万円)']
+                    if '単勝' in race_ranking:
+                        win_raito = race_ranking['単勝']
+                    if '人気' in race_ranking:
+                        popular = race_ranking['人気']
+
+                    set_param = f'{race_pkey}'
+
+                    if ranking is None:
+                        ranking = f'{null}'
+                        set_param += f',{ranking}'
+                    else:
+                        set_param += f',"{ranking}"'
+                    if frame_number is None:
+                        frame_number = f'{null}'
+                        set_param += f',{frame_number}'
+                    else:
+                        set_param += f',"{frame_number}"'
+                    if horse_number is None:
+                        horse_number = f'{null}'
+                        set_param += f',{horse_number}'
+                    else:
+                        set_param += f',"{horse_number}"'
+                    if horse_pkey is None:
+                        horse_pkey = f'{null}'
+                        set_param += f',{horse_pkey}'
+                    else:
+                        set_param += f',"{horse_pkey}"'
+                    if sexual_age is None:
+                        sexual_age = f'{null}'
+                        set_param += f',{sexual_age}'
+                    else:
+                        set_param += f',"{sexual_age}"'
+                    if weight is None:
+                        weight = f'{null}'
+                        set_param += f',{weight}'
+                    else:
+                        set_param += f',"{weight}"'
+                    if horse_weight is None:
+                        horse_weight = f'{null}'
+                        set_param += f',{horse_weight}'
+                    else:
+                        set_param += f',"{horse_weight}"'
+                    if _times_ is None:
+                        _times_ = f'{null}'
+                        set_param += f',{_times_}'
+                    else:
+                        set_param += f',"{_times_}"'
+                    if passing is None:
+                        passing = f'{null}'
+                        set_param += f',{passing}'
+                    else:
+                        set_param += f',"{passing}"'
+                    if last_spurt is None:
+                        last_spurt = f'{null}'
+                        set_param += f',{last_spurt}'
+                    else:
+                        set_param += f',"{last_spurt}"'
+                    if jockey_pkey is None:
+                        jockey_pkey = f'{null}'
+                        set_param += f',{jockey_pkey}'
+                    else:
+                        set_param += f',"{jockey_pkey}"'
+                    if trainer_pkey is None:
+                        trainer_pkey = f'{null}'
+                        set_param += f',{trainer_pkey}'
+                    else:
+                        set_param += f',"{trainer_pkey}"'
+                    if owner_pkey is None:
+                        owner_pkey = f'{null}'
+                        set_param += f',{owner_pkey}'
+                    else:
+                        set_param += f',"{owner_pkey}"'
+                    if prize_money is None:
+                        prize_money = f'{null}'
+                        set_param += f',{prize_money}'
+                    else:
+                        set_param += f',"{prize_money}"'
+                    if win_raito is None:
+                        win_raito = f'{null}'
+                        set_param += f',{win_raito}'
+                    else:
+                        set_param += f',"{win_raito}"'
+                    if popular is None:
+                        popular = f'{null}'
+                        set_param += f',{popular}'
+                    else:
+                        set_param += f',"{popular}"'
+
+                    sql_cmd = f'{select} * FROM {RequestRaceRankingTbl} WHERE race_pkey = {race_pkey} ' \
+                        + f'AND frame_number = "{frame_number}" AND horse_number = "{horse_number}"'
+
+                    self.DBcursor.execute(sql_cmd)
+                    TblInfo = self.DBcursor.fetchall()
+
+                    if TblInfo:
+                        pkey = TblInfo[0][0]
+                        sql_cmd = f'{update} {RequestRaceRankingTbl} SET ({set_clm_name}) = ({set_param}) WHERE pkey={pkey}'
+                        self.DBcursor.execute(sql_cmd)
+                    else:
+                        sql_cmd = f'{insert} {RequestRaceRankingTbl} ({set_clm_name}) VALUES ({set_param})'
+                        self.DBcursor.execute(sql_cmd)
+
+                        sql_cmd = f'{select} pkey FROM {RequestRaceRankingTbl} WHERE rowid = last_insert_rowid()'
+                        self.DBcursor.execute(sql_cmd)
+
+                        t = self.DBcursor.fetchall()
+                        if t:
+                            pkey = t[0][0]
+
+        return pkey
+
+
     def get_request_Tbl(self):
         self.connect_DB()
 
@@ -441,6 +941,43 @@ class class_SQLite():
         self.disconnect_DB()
 
         return names
+
+    def get_RaceURL_Tbl(self,race_pkey=None,Name=None,url=None,limit_number=None):
+        isWhere = False
+        self.connect_DB()
+
+        sql_cmd = f'{select} * FROM {RaceTbl} '
+        if race_pkey is not None:
+            if isinstance(race_pkey,int):
+                sql_cmd += f'WHERE pkey={race_pkey} '
+                isWhere = True
+        if Name is not None:
+            if isinstance(Name,str):
+                if isWhere:
+                    sql_cmd += f'AND Name={Name} '
+                else:
+                    sql_cmd += f'WHERE Name={Name} '
+                isWhere = True
+        if url is not None:
+            if isinstance(url,str):
+                if isWhere:
+                    sql_cmd += f'AND URL={url} '
+                else:
+                    sql_cmd += f'WHERE URL={url} '
+        if limit_number is not None:
+            if isinstance(limit_number,int):
+                sql_cmd += f'LIMIT {limit_number} '
+
+        self.DBcursor.execute(sql_cmd)
+        TblInfo = self.DBcursor.fetchall()
+
+        RaceNameData = dict()
+        for d in TblInfo:
+            RaceNameData.setdefault(d[0],{'name':d[1],'date':d[2],'held':d[3],'race_number':d[4],'url':d[5]})
+
+        self.disconnect_DB()
+
+        return RaceNameData
 
     def horse_pedigree(self,horse_pkey):
         blood_2nd_pedigree = ['ff','fm','mf','mm']
