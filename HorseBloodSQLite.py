@@ -166,7 +166,7 @@ class class_SQLite():
 
         self.DBcursor.execute(sql_cmd)
 
-    def create_Request_Race_Ranking_Tbl(self):
+    def create_Race_Ranking_Tbl(self):
         sql_cmd = f'CREATE TABLE IF NOT EXISTS "{RequestRaceRankingTbl}" '
         sql_cmd = sql_cmd + \
             f'("pkey" INTEGER {not_null} {primary_key} {auto_increment} {uniaue}'
@@ -829,7 +829,6 @@ class class_SQLite():
                             pkey = t[0][0]
 
         return pkey
-
 
     def get_request_Tbl(self):
         self.connect_DB()

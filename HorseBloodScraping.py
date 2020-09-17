@@ -195,6 +195,11 @@ class HorseData_scraping():
 
         self.DB.replace_HorseBoold_Tbl(horse_name,horse_birthday,horse_blood,link_dict,url,horse_pkey)
 
+        race_dict = self.get_RaceInfo(soup)
+
+        r_link_dict =self.get_RaceResultInfo(race_dict)
+
+        link_dict.update(r_link_dict)
         u_link_dict.update(link_dict)
 
         self.DB.horse_pedigree(horse_pkey)
@@ -227,8 +232,9 @@ class HorseData_scraping():
         self.DB.create_Request_Tbl()
         self.DB.create_Race_Tbl()
         self.DB.create_Request_Race_Tbl()
-        self.DB.create_Request_Race_Ranking_Tbl()
+        self.DB.create_Race_Ranking_Tbl()
         self.DB.create_Jockey_Tbl()
+        self.DB.create_Trainer_Tbl()
         self.DB.create_Owner_Tbl()
         self.DB.commit_DB()
         self.DB.disconnect_DB()
@@ -374,7 +380,60 @@ class HorseData_scraping():
 
         return
 
-    def get_RaceInfo(self,horse_url,horse_name,u_link_dict):
+    def get_RaceInfo(self,soup):
+        race_results = soup.find('table',class_='db_h_race_results nk_tb_common')
+
+        race_dict = dict()
+
+        # 競争成績のデータがある場合
+        if race_results:
+            th_tble = race_results.find_all('th')
+
+            race_table_clms = list()
+            for th in th_tble:
+                race_table_clms.append(th.get_text())
+
+            require_race_table_clms = ['日付', '開催', 'R', 'レース名']
+            require_num_list = [ race_table_clms.index(clm) for clm in race_table_clms if clm in require_race_table_clms]
+
+            tbody_tble = race_results.find_all('tbody')
+            for tbody in tbody_tble:
+                tr_table = tbody.find_all('tr')
+                for tr in tr_table:
+                    race_date = race_held = race_number = None
+                    race_name = race_url = None
+                    td_table = tr.find_all('td')
+                    for i, td in enumerate(td_table):
+                        if i in require_num_list:
+                            clm_name = require_race_table_clms[require_num_list.index(i)]
+                            if clm_name == require_race_table_clms[0]:
+                                race_date = td.get_text()
+                            if clm_name == require_race_table_clms[1]:
+                                race_held = td.get_text()
+                            if clm_name == require_race_table_clms[2]:
+                                race_number = td.get_text()
+                            if clm_name == require_race_table_clms[3]:
+                                links = td.find('a')
+                                if links:
+                                    race_name = links.attrs['title']
+                                    race_url = "https://db.netkeiba.com" + links.attrs['href']
+                            if race_date and race_held and race_number \
+                                and race_name and race_url:
+
+                                soup = self.get_response(race_url)
+                                print('access:%-16s:%s' % (race_name,race_url))
+                                race_name, race_date = self.get_RaceName(soup)
+
+                                race_pkey = self.DB.replace_Race_Tbl(race_name,race_date,race_held,race_number,race_url,None)
+
+                                race_dict.setdefault(race_pkey,race_url)
+
+                                print('レース名:',race_name,'開催日:',race_date)
+                                break
+
+        return race_dict
+
+    def _get_RaceInfo(self,horse_url,horse_name,u_link_dict):
         soup = self.get_response(horse_url)
         print('access:%-16s:%s' % (horse_name,horse_url))
         race_results = soup.find('table',class_='db_h_race_results nk_tb_common')
@@ -630,11 +689,88 @@ class HorseData_scraping():
 
         return race_info
 
+    def get_RaceResultInfo(self, r_link_dict):
+        link_dict = dict()
+
+        while(True):
+            keylist = list(r_link_dict.keys())
+            if keylist:
+                race_pkey = keylist[0]
+                race_url = r_link_dict[race_pkey]
+                r_link_dict.pop(race_pkey)
+            else:
+                break
+
+            soup = self.get_response(race_url)
+            race_info = self.analysis_RaceResult(soup)
+
+            if isinstance(race_info,dict):
+                base_info, passing_info, time_info = None, None, None
+                if '基本情報' in race_info:
+                    print(race_info['基本情報'])
+                    base_info = race_info['基本情報']
+                    if '通過順位' in race_info:
+                        passing = race_info['通過順位']
+                        passing_info = list()
+                        keys = ['1コーナー','2コーナー','3コーナー','4コーナー']
+                        for corner in passing:
+                            k = list(corner.keys())[0]
+                            if k in keys:
+                                index = keys.index(k)
+                                while(len(passing_info) <= index-1):
+                                    passing_info.append('')
+                            v = list(corner.values())[0]
+                            passing_info.append(v)
+                    if 'ラップタイム' in race_info:
+                        _times_ = race_info['ラップタイム']
+                        time_info = list()
+                        for _t_ in _times_:
+                            v = list(_t_.values())[0]
+                            time_info.append(v)
+                    self.DB.replace_Request_Race_Tbl(race_pkey,base_info, passing_info, time_info)
+
+                horse_link_list = jockey_link_list = trainer_link_list = owner_link_list = None
+                if 'Link' in race_info:
+                    Links = race_info['Link']
+                    if '馬' in Links:
+                        horse_link_list = Links['馬']
+                    if '騎手' in Links:
+                        jockey_link_list = Links['騎手']
+                    if '調教師' in Links:
+                        trainer_link_list = Links['調教師']
+                    if '馬主' in Links:
+                        owner_link_list = Links['馬主']
+
+                if horse_link_list:
+
+                    for horse in horse_link_list:
+                        if isinstance(horse,dict):
+                            horse_name = list(horse.keys())[0]
+                            horse_url = horse[horse_name]
+                            horse_pkey = self.DB.replace_Horse_Tbl(horse_name,None,horse_url,None)
+                            link_dict.setdefault(horse_name,[horse_url,horse_pkey])
+
+                if jockey_link_list:
+                    self.DB.replace_Jockey_Tbl(jockey_link_list)
+                if trainer_link_list:
+                    self.DB.replace_Trainer_Tbl(trainer_link_list)
+                if owner_link_list:
+                    self.DB.replace_Owner_Tbl(owner_link_list)
+
+                if 'レース結果' in race_info:
+                    race_ranking_info = race_info['レース結果']
+                    self.DB.replace_Request_RaceRanking_Tbl(
+                        race_pkey,race_ranking_info,
+                        horse_link_list,jockey_link_list,trainer_link_list,owner_link_list)
+                    pass
+
+        return link_dict
+
     def run_race_result_info(self):
         self.DB.connect_DB()
         self.DB.create_Race_Tbl()
         self.DB.create_Request_Race_Tbl()
-        self.DB.create_Request_Race_Ranking_Tbl()
+        self.DB.create_Race_Ranking_Tbl()
         self.DB.create_Jockey_Tbl()
         self.DB.create_Owner_Tbl()
         self.DB.create_Trainer_Tbl()
@@ -737,8 +873,8 @@ class HorseData_scraping():
 
 if __name__ == '__main__':
     hScr = HorseData_scraping(limit_time=3000)
-    '''
-    #start_url = "https://db.netkeiba.com/horse/2002100816/" #ディープインパクト
+    
+    start_url = "https://db.netkeiba.com/horse/2002100816/" #ディープインパクト
     #start_url = "https://db.netkeiba.com/horse/000a015efd/" #Old Bald Peg 簡易血統表なし
     #start_url = "https://db.netkeiba.com/horse/000a015b48/" #Frolic 母母Sister 2 to Blastのプロフィールページ異常
     #start_url = "https://db.netkeiba.com/horse/000a016741/" #Northumberland Arabian Mareのプロフィールページ異常
@@ -753,6 +889,7 @@ if __name__ == '__main__':
     #hScr.analysis_RaceResult(soup)
 
     hScr.run_race_result_info()
+    '''
 
 
 
