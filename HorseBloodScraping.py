@@ -433,65 +433,6 @@ class HorseData_scraping():
 
         return race_dict
 
-    def _get_RaceInfo(self,horse_url,horse_name,u_link_dict):
-        soup = self.get_response(horse_url)
-        print('access:%-16s:%s' % (horse_name,horse_url))
-        race_results = soup.find('table',class_='db_h_race_results nk_tb_common')
-
-        self.DB.connect_DB()
-
-        # 競争成績のデータがある場合
-        if race_results:
-            th_tble = race_results.find_all('th')
-
-            race_table_clms = list()
-            for th in th_tble:
-                race_table_clms.append(th.get_text())
-
-            require_race_table_clms = ['日付', '開催', 'R', 'レース名']
-            require_num_list = [ race_table_clms.index(clm) for clm in race_table_clms if clm in require_race_table_clms]
-
-
-            tbody_tble = race_results.find_all('tbody')
-            for tbody in tbody_tble:
-                tr_table = tbody.find_all('tr')
-                for tr in tr_table:
-                    race_date = race_held = race_number = None
-                    race_name = race_url = None
-                    td_table = tr.find_all('td')
-                    for i, td in enumerate(td_table):
-                        if i in require_num_list:
-                            clm_name = require_race_table_clms[require_num_list.index(i)]
-                            if clm_name == require_race_table_clms[0]:
-                                race_date = td.get_text()
-                            if clm_name == require_race_table_clms[1]:
-                                race_held = td.get_text()
-                            if clm_name == require_race_table_clms[2]:
-                                race_number = td.get_text()
-                            if clm_name == require_race_table_clms[3]:
-                                links = td.find('a')
-                                if links:
-                                    race_name = links.attrs['title']
-                                    race_url = "https://db.netkeiba.com" + links.attrs['href']
-                            if race_date and race_held and race_number \
-                                and race_name and race_url:
-
-                                soup = self.get_response(race_url)
-                                print('access:%-16s:%s' % (race_name,race_url))
-                                race_name, race_date = self.get_RaceName(soup)
-
-                                race_pkey = self.DB.replace_Race_Tbl(race_name,race_date,race_held,race_number,race_url,None)
-
-                                print('レース名:',race_name,'開催日:',race_date)
-                                break
-
-        self.DB.replace_request_Tbl(u_link_dict)
-
-        self.DB.commit_DB()
-        self.DB.disconnect_DB()
-
-        return u_link_dict
-
     def analysis_RaceResult(self,soup):
         race_info = dict()
 
@@ -749,6 +690,8 @@ class HorseData_scraping():
                             horse_url = horse[horse_name]
                             horse_pkey = self.DB.replace_Horse_Tbl(horse_name,None,horse_url,None)
                             link_dict.setdefault(horse_name,[horse_url,horse_pkey])
+                    else:
+                        self.DB.replace_request_Tbl(link_dict)
 
                 if jockey_link_list:
                     self.DB.replace_Jockey_Tbl(jockey_link_list)
@@ -871,9 +814,68 @@ class HorseData_scraping():
             self.DB.disconnect_DB()
         return
 
+    def _get_RaceInfo(self,horse_url,horse_name,u_link_dict):
+        soup = self.get_response(horse_url)
+        print('access:%-16s:%s' % (horse_name,horse_url))
+        race_results = soup.find('table',class_='db_h_race_results nk_tb_common')
+
+        self.DB.connect_DB()
+
+        # 競争成績のデータがある場合
+        if race_results:
+            th_tble = race_results.find_all('th')
+
+            race_table_clms = list()
+            for th in th_tble:
+                race_table_clms.append(th.get_text())
+
+            require_race_table_clms = ['日付', '開催', 'R', 'レース名']
+            require_num_list = [ race_table_clms.index(clm) for clm in race_table_clms if clm in require_race_table_clms]
+
+
+            tbody_tble = race_results.find_all('tbody')
+            for tbody in tbody_tble:
+                tr_table = tbody.find_all('tr')
+                for tr in tr_table:
+                    race_date = race_held = race_number = None
+                    race_name = race_url = None
+                    td_table = tr.find_all('td')
+                    for i, td in enumerate(td_table):
+                        if i in require_num_list:
+                            clm_name = require_race_table_clms[require_num_list.index(i)]
+                            if clm_name == require_race_table_clms[0]:
+                                race_date = td.get_text()
+                            if clm_name == require_race_table_clms[1]:
+                                race_held = td.get_text()
+                            if clm_name == require_race_table_clms[2]:
+                                race_number = td.get_text()
+                            if clm_name == require_race_table_clms[3]:
+                                links = td.find('a')
+                                if links:
+                                    race_name = links.attrs['title']
+                                    race_url = "https://db.netkeiba.com" + links.attrs['href']
+                            if race_date and race_held and race_number \
+                                and race_name and race_url:
+
+                                soup = self.get_response(race_url)
+                                print('access:%-16s:%s' % (race_name,race_url))
+                                race_name, race_date = self.get_RaceName(soup)
+
+                                race_pkey = self.DB.replace_Race_Tbl(race_name,race_date,race_held,race_number,race_url,None)
+
+                                print('レース名:',race_name,'開催日:',race_date)
+                                break
+
+        self.DB.replace_request_Tbl(u_link_dict)
+
+        self.DB.commit_DB()
+        self.DB.disconnect_DB()
+
+        return u_link_dict
+
 if __name__ == '__main__':
     hScr = HorseData_scraping(limit_time=3000)
-    
+
     start_url = "https://db.netkeiba.com/horse/2002100816/" #ディープインパクト
     #start_url = "https://db.netkeiba.com/horse/000a015efd/" #Old Bald Peg 簡易血統表なし
     #start_url = "https://db.netkeiba.com/horse/000a015b48/" #Frolic 母母Sister 2 to Blastのプロフィールページ異常
