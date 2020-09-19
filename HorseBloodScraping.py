@@ -14,7 +14,8 @@ import HorseBloodSQLite as HBDB
 
 class HorseData_scraping():
     def __init__(self,interval_time=1,limit_time = 600):
-        self.time_out = 3
+        self.time_out = 10
+        
         ua = UserAgent()
         self.header = {'user-agent':ua.chrome}
         if interval_time >= 1:
@@ -22,7 +23,7 @@ class HorseData_scraping():
         else:
             self.interval_time = 1
 
-        if limit_time > 0 and limit_time <= 3600:
+        if limit_time > 0 and limit_time <= 7200:#3600:
             self.limit_time = limit_time
         else:
             self.limit_time = 600
@@ -874,7 +875,7 @@ class HorseData_scraping():
         return u_link_dict
 
 if __name__ == '__main__':
-    hScr = HorseData_scraping(limit_time=3000)
+    hScr = HorseData_scraping(limit_time=7200)
 
     start_url = "https://db.netkeiba.com/horse/2002100816/" #ディープインパクト
     #start_url = "https://db.netkeiba.com/horse/000a015efd/" #Old Bald Peg 簡易血統表なし
