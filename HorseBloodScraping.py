@@ -655,14 +655,16 @@ class HorseData_scraping():
                         passing = race_info['通過順位']
                         passing_info = list()
                         keys = ['1コーナー','2コーナー','3コーナー','4コーナー']
+                        corner_dict = dict()
                         for corner in passing:
                             k = list(corner.keys())[0]
-                            if k in keys:
-                                index = keys.index(k)
-                                while(len(passing_info) <= index-1):
+                            corner_dict.setdefault(k,corner[k])
+                        else:
+                            for k in keys:
+                                if k in corner_dict:
+                                    passing_info.append(corner_dict[k])
+                                else:
                                     passing_info.append('')
-                            v = list(corner.values())[0]
-                            passing_info.append(v)
                     if 'ラップタイム' in race_info:
                         _times_ = race_info['ラップタイム']
                         time_info = list()
